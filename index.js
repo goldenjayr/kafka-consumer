@@ -34,9 +34,11 @@ try {
   );
 
   kafkaConsumerStream.on("data", chunk => {
-    if (chunk.key.includes("last")) {
-      arrayLength = Number(chunk.key.split(".")[0]);
+    const key = JSON.parse(chunk.key);
+    if (key.last) {
+      arrayLength = Number(key.order);
     }
+    chunk.key = key;
     streamArray.unshift(chunk);
     if (streamArray.length === arrayLength) {
       renderImage();
@@ -44,22 +46,20 @@ try {
   });
 
   const renderImage = () => {
-    const { key } = streamArray.find(e => e.key.includes("last"));
-    const file = key.split(".");
-    const [keyName, fileName, fileExtension, fileSize] = file;
+    const { key } = streamArray.find(e => e.key);
+    const { fileName, fileSize } = key;
+    console.log("TCL: renderImage -> streamArray", streamArray.map(el => ({partition: el.partition, key: el.key.order})))
 
     console.log(`File Size is ${fileSize} bytes`);
-    let filePath = path.join(
-      process.cwd(),
-      `repository/${fileName}.${fileExtension}`
-    );
+    let filePath = path.join(process.cwd(), `../file-repository/${fileName}`);
     const writeStream = fs.createWriteStream(filePath);
     let progress = 0;
     let percentage = 0;
 
     streamArray
-      .sort((a, b) => a.key.split(".")[0] - b.key.split(".")[0])
+      .sort((a, b) => a.key.order - b.key.order)
       .forEach(chunk => {
+        console.log('ORDERED ARRAY --> ', {partition: chunk.partition, key: chunk.key.order})
         progress = progress + chunk.value.length;
         percentage = (progress / fileSize) * 100;
         console.log(
