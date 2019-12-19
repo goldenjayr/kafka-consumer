@@ -1,5 +1,7 @@
 const { kafka_server } = require("./kafkaConfig");
 
+
+
 const kafkaToRepoConsumer = () => {
   const consumerOptions = {
     kafkaHost: kafka_server,
@@ -10,7 +12,8 @@ const kafkaToRepoConsumer = () => {
     fromOffset: "latest",
     encoding: "buffer",
     keyEncoding: "utf8",
-    outOfRangeOffset: "earliest"
+    outOfRangeOffset: "earliest",
+    autoCommit: false
   };
 
   try {
@@ -20,9 +23,19 @@ const kafkaToRepoConsumer = () => {
     );
     const fileList = {};
     const fileNumberOfChunks = {};
+    let receiveProgress = 0
+    let receivePercentage = 0
 
     kafkaConsumerStream.on("data", chunk => {
+
       const key = JSON.parse(chunk.key);
+
+      receiveProgress = receiveProgress +  chunk.value.length
+      receivePercentage = (receiveProgress / key.fileSize) * 100
+      console.log(`Receiving from kafka ----- ${receiveProgress} bytes ---- ${Math.round(
+        receivePercentage
+      )}%`)
+
       if (key.last) {
         fileNumberOfChunks[`${key.fileName}`] = Number(key.order);
         console.log("TCL: fileNumberOfChunks", fileNumberOfChunks);
@@ -63,6 +76,7 @@ const kafkaToRepoConsumer = () => {
             )}%`
           );
           writeStream.write(chunk.value);
+          kafkaConsumerStream.commit(chunk, false, () => console.log('Offset Commited'))
         });
       if (percentage === 100) {
         console.log("Upload is complete");
@@ -153,7 +167,10 @@ const kafkaToClientConsumer = () => {
   }
 };
 
+
+
 module.exports = {
   kafkaToRepoConsumer,
+  offsetCommitsConsumer,
   kafkaToClientConsumer
 };
